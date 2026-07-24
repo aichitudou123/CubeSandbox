@@ -1159,6 +1159,8 @@ fn test_boot_from_vhost_user_blk(
 fn _test_native_virtio_fs(hotplug: bool, pci_segment: Option<u16>) {
     #[cfg(target_arch = "x86_64")]
     let focal_image = FOCAL_IMAGE_NAME.to_string();
+    #[cfg(target_arch = "aarch64")]
+    let focal_image = FOCAL_IMAGE_NAME.to_string();
     let focal = UbuntuDiskConfig::new(focal_image);
     let guest = Guest::new(Box::new(focal));
     let api_socket = temp_api_path(&guest.tmp_dir);
@@ -1170,6 +1172,8 @@ fn _test_native_virtio_fs(hotplug: bool, pci_segment: Option<u16>) {
     shared_dir.push("shared_dir");
 
     #[cfg(target_arch = "x86_64")]
+    let kernel_path = direct_kernel_boot_path();
+    #[cfg(target_arch = "aarch64")]
     let kernel_path = direct_kernel_boot_path();
 
     let mut guest_command = GuestCommand::new(&guest);
@@ -7728,7 +7732,10 @@ mod vmm_instance {
         VmConfig,
     };
 
+    #[cfg(target_arch = "x86_64")]
     use crate::x86_64::FOCAL_IMAGE_NAME;
+    #[cfg(target_arch = "aarch64")]
+    use crate::aarch64::FOCAL_IMAGE_NAME;
     use crate::{
         check_latest_events_exact, check_sequential_events, direct_kernel_boot_path,
         temp_event_monitor_path, temp_snapshot_dir_path, MetaEvent, DIRECT_KERNEL_BOOT_CMDLINE,
