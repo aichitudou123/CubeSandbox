@@ -897,7 +897,7 @@ fn test_vhost_user_net(
         #[cfg(target_arch = "x86_64")]
         let grep_cmd = "grep -c PCI-MSI /proc/interrupts";
         #[cfg(target_arch = "aarch64")]
-        let grep_cmd = "grep -c ITS-MSI /proc/interrupts";
+        let grep_cmd = "grep -c ITS-PCI-MSIX /proc/interrupts";
         assert_eq!(
             guest
                 .ssh_command(grep_cmd)
@@ -2951,7 +2951,7 @@ mod common_parallel {
         #[cfg(target_arch = "x86_64")]
         let grep_cmd = "grep -c PCI-MSI /proc/interrupts";
         #[cfg(target_arch = "aarch64")]
-        let grep_cmd = "grep -c ITS-MSI /proc/interrupts";
+        let grep_cmd = "grep -c ITS-PCI-MSIX /proc/interrupts";
 
         let r = std::panic::catch_unwind(|| {
             assert_eq!(
@@ -3150,7 +3150,7 @@ mod common_parallel {
             let grep_cmd = if cfg!(target_arch = "x86_64") {
                 "grep -c PCI-MSI /proc/interrupts"
             } else {
-                "grep -c ITS-MSI /proc/interrupts"
+                "grep -c ITS-PCI-MSIX /proc/interrupts"
             };
             assert_eq!(
                 guest
