@@ -1160,7 +1160,11 @@ fn _test_native_virtio_fs(hotplug: bool, pci_segment: Option<u16>) {
     #[cfg(target_arch = "x86_64")]
     let focal_image = FOCAL_IMAGE_NAME.to_string();
     #[cfg(target_arch = "aarch64")]
-    let focal_image = FOCAL_IMAGE_NAME.to_string();
+    let focal_image = if hotplug {
+        FOCAL_IMAGE_UPDATE_KERNEL_NAME.to_string()
+    } else {
+        FOCAL_IMAGE_NAME.to_string()
+    };
     let focal = UbuntuDiskConfig::new(focal_image);
     let guest = Guest::new(Box::new(focal));
     let api_socket = temp_api_path(&guest.tmp_dir);
@@ -1174,7 +1178,11 @@ fn _test_native_virtio_fs(hotplug: bool, pci_segment: Option<u16>) {
     #[cfg(target_arch = "x86_64")]
     let kernel_path = direct_kernel_boot_path();
     #[cfg(target_arch = "aarch64")]
-    let kernel_path = direct_kernel_boot_path();
+    let kernel_path = if hotplug {
+        edk2_path()
+    } else {
+        direct_kernel_boot_path()
+    };
 
     let mut guest_command = GuestCommand::new(&guest);
     guest_command
