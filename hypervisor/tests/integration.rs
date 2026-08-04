@@ -2142,6 +2142,12 @@ fn enable_guest_watchdog(guest: &Guest, watchdog_sec: u32) {
             watchdog_sec
         ))
         .unwrap();
+
+    // Ask systemd to reload its config so the watchdog is activated
+    // immediately, without going through 'sudo reboot' which would hit
+    // the ACPI-reset -> exit_evt workaround in device_manager.rs and
+    // kill the VMM instead of rebooting (see test_watchdog).
+    guest.ssh_command("sudo systemctl daemon-reexec").unwrap();
 }
 
 fn snapshot_and_check_events(api_socket: &str, snapshot_dir: &str, event_path: &str) {
@@ -6671,14 +6677,6 @@ mod common_parallel {
             // Enable the watchdog with a 15s timeout
             enable_guest_watchdog(&guest, 15);
 
-            // Ask systemd to reload its config so the watchdog is activated
-            // immediately, without going through 'sudo reboot' which would hit
-            // the ACPI-reset -> exit_evt workaround in device_manager.rs and
-            // kill the VMM instead of rebooting.
-            guest
-                .ssh_command("sudo systemctl daemon-reexec")
-                .unwrap();
-
             assert_eq!(get_reboot_count(&guest), expected_reboot_count);
             assert_eq!(
                 guest
@@ -10744,13 +10742,10 @@ mod live_migration {
             }
 
             // Enable watchdog and ensure its functional
-            let mut expected_reboot_count = 1;
+            let expected_reboot_count = 1;
             // Enable the watchdog with a 15s timeout
             enable_guest_watchdog(&guest, 15);
-            // Reboot and check that systemd has activated the watchdog
-            guest.ssh_command("sudo reboot").unwrap();
-            guest.wait_vm_boot(None).unwrap();
-            expected_reboot_count += 1;
+
             assert_eq!(get_reboot_count(&guest), expected_reboot_count);
             assert_eq!(
                 guest
@@ -10759,7 +10754,7 @@ mod live_migration {
                     .trim()
                     .parse::<u32>()
                     .unwrap_or_default(),
-                2
+                1
             );
             // Allow some normal time to elapse to check we don't get spurious reboots
             thread::sleep(std::time::Duration::new(40, 0));
@@ -10812,7 +10807,7 @@ mod live_migration {
             guest.check_devices_common(None, Some(&console_text), Some(&pmem_path));
 
             // Perform checks on watchdog
-            let mut expected_reboot_count = 2;
+            let mut expected_reboot_count = 1;
 
             // Allow some normal time to elapse to check we don't get spurious reboots
             thread::sleep(std::time::Duration::new(40, 0));
