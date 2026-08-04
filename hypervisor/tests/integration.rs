@@ -2230,6 +2230,22 @@ fn _test_restore_from_config(
     );
     // Wait for the VM to be restored
     thread::sleep(std::time::Duration::new(10, 0));
+
+    // Workaround: same as above, manually ensure the restored tap has the
+    // correct host IP after restore.
+    if let Some(ref nets) = net_conf {
+        for net in nets {
+            if let Some(ref tap) = net.tap {
+                if !tap.is_empty() {
+                    let _ = exec_host_command_output(&format!(
+                        "ip addr add {}/24 dev {} 2>/dev/null; ip link set {} up 2>/dev/null",
+                        net.ip, tap, tap
+                    ));
+                }
+            }
+        }
+    }
+
     let r = std::panic::catch_unwind(|| {
         // Automatically restart the VM after it has been restored
         let latest_events = [
@@ -7401,7 +7417,10 @@ mod common_sequential {
         let vsock_id = "_vsock0";
 
         let net_id = "net123";
-        let tap_name = "vmtap0";
+        // Use a name that cannot collide with the auto-assigned `vmtap%d`
+        // taps used by parallel tests (open_named("vmtap%d") starts at
+        // vmtap0), otherwise OpenTap fails with "Device or resource busy".
+        let tap_name = "src-tap0";
         let net_params = format!(
             "id={},tap={},mac={},ip={},mask=255.255.255.0",
             net_id, tap_name, guest.network.guest_mac, guest.network.host_ip
@@ -7466,6 +7485,16 @@ mod common_sequential {
             .capture_output()
             .spawn()
             .unwrap();
+
+        // Workaround: cloud-hypervisor's set_ip_addr (SIOCSIFADDR ioctl) may
+        // not take effect on the tap device in some environments (e.g. when
+        // NetworkManager is active). Manually ensure the tap has the correct
+        // host IP before waiting for VM boot.
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let _ = exec_host_command_output(&format!(
+            "ip addr add {}/24 dev {} 2>/dev/null; ip link set {} up",
+            guest.network.host_ip, tap_name, tap_name
+        ));
 
         // Create the snapshot directory
         let snapshot_dir = temp_snapshot_dir_path(&guest.tmp_dir);
