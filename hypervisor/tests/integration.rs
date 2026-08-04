@@ -7851,7 +7851,9 @@ mod common_sequential {
         ];
         let mut restored = false;
         for _ in 0..30 {
-            if check_latest_events_exact(&restored_events, &event_path_restored) {
+            if std::path::Path::new(&event_path_restored).exists()
+                && check_latest_events_exact(&restored_events, &event_path_restored)
+            {
                 restored = true;
                 break;
             }
@@ -7879,20 +7881,16 @@ mod common_sequential {
 
             // (c) Access to the deleted file errors out on the guest side
             // (ENOENT). The error is *guest-visible*, not VM-fatal.
+            // Note: with cache=always the guest may still see a positive
+            // dentry for the unlinked file (so `test -e` can return
+            // present); only the data read is guaranteed to fail. We
+            // assert on the read, not on dentry visibility.
             let probe = guest
-                .ssh_command(
-                    "cat mount_dir/victim.txt >/dev/null 2>&1; \
-                     echo rc=$?; \
-                     test -e mount_dir/victim.txt && echo present || echo missing",
-                )
+                .ssh_command("cat mount_dir/victim.txt >/dev/null 2>&1; echo rc=$?")
                 .unwrap();
             assert!(
                 probe.contains("rc=") && !probe.contains("rc=0"),
                 "expected non-zero exit reading deleted file, got: {probe:?}",
-            );
-            assert!(
-                probe.contains("missing"),
-                "expected victim.txt to be missing on guest, got: {probe:?}",
             );
 
             // (d) The FS must still accept new operations after the
