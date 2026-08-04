@@ -50,6 +50,40 @@ OUTPUT_DIR="${OUTPUT_DIR:-${WORK_DIR}/output}"
 
 JOBS="${JOBS:-$(nproc)}"
 
+apply_virtio_wdt() {
+    local wdt_src="${SCRIPT_DIR}/virtio_wdt.c"
+    local wdt_dst="${SRC_DIR}/drivers/watchdog/virtio_wdt.c"
+    local kconfig="${SRC_DIR}/drivers/watchdog/Kconfig"
+    local makefile="${SRC_DIR}/drivers/watchdog/Makefile"
+
+    if [[ ! -f "${wdt_src}" ]]; then
+        err "virtio-wdt driver source not found: ${wdt_src}"
+        exit 1
+    fi
+
+    log "Injecting virtio-wdt driver into ${SRC_DIR}/drivers/watchdog/"
+
+    # 1. Copy the driver source into the kernel tree.
+    cp -f "${wdt_src}" "${wdt_dst}"
+
+    # 2. Add a Kconfig entry (before the "# ISA-based Watchdog Cards" section).
+    if ! grep -q "config VIRTIO_WDT" "${kconfig}"; then
+        sed -i '/^# ISA-based Watchdog Cards$/i \
+config VIRTIO_WDT\
+\ttristate "Virtio Watchdog support"\
+\tdepends on VIRTIO\
+\tselect WATCHDOG_CORE\
+\thelp\
+\t  This driver provides support for the virtio watchdog device.\
+' "${kconfig}"
+    fi
+
+    # 3. Add a Makefile rule.
+    if ! grep -q "virtio_wdt" "${makefile}"; then
+        echo 'obj-$(CONFIG_VIRTIO_WDT) += virtio_wdt.o' >> "${makefile}"
+    fi
+}
+
 # ------------------------- Build vmlinux -------------------------
 build_vmlinux() {
     log "Building vmlinux with ${JOBS} parallel jobs..."
@@ -102,6 +136,7 @@ main() {
     ensure_build_tools
 
     clone_source
+    apply_virtio_wdt
     fetch_config
     build_vmlinux
 
