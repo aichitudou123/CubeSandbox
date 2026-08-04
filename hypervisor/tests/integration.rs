@@ -2471,7 +2471,19 @@ fn _test_snapshot_restore_from_different_binary(
             .unwrap();
 
     // net config
-    let tap_name_restored = "restore-tap";
+    // Use a per-test unique tap name derived from the temp dir to avoid
+    // collision with other parallel snapshot tests that also pre-create a
+    // restore tap (ip tuntap add fails with EBUSY on TUNSETIFF when another
+    // test has already opened the same name).
+    let tap_name_restored = format!(
+        "rtap{}",
+        guest
+            .tmp_dir
+            .as_path()
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+    );
     let net_params_restored = format!(
         "id={},tap={},mac={},ip={},mask=255.255.255.0",
         net_id, tap_name_restored, guest.network.guest_mac, guest.network.host_ip
@@ -7556,7 +7568,19 @@ mod common_sequential {
         .unwrap();
 
         // net config
-        let tap_name_restored = "restore-tap";
+        // Use a per-test unique tap name derived from the temp dir to avoid
+        // collision with other parallel snapshot tests that also pre-create a
+        // restore tap (ip tuntap add fails with EBUSY on TUNSETIFF when another
+        // test has already opened the same name).
+        let tap_name_restored = format!(
+            "rtap{}",
+            guest
+                .tmp_dir
+                .as_path()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+        );
         let net_params_restored = format!(
             "id={},tap={},mac={},ip={},mask=255.255.255.0",
             net_id, tap_name_restored, guest.network.guest_mac, guest.network.host_ip
