@@ -6838,6 +6838,22 @@ mod common_parallel {
             fs::read_to_string(format!("/sys/class/net/{}/ifindex", guest_macvtap_name)).unwrap();
         let tap_device = format!("/dev/tap{}", tap_index.trim());
 
+        // PVM 容器环境 workaround：在非 init_net 命名空间里创建 macvtap 时，
+        // devtmpfs 不会自动生成 /dev/tap<ifindex> 字符设备节点（裸金属 init_net
+        // 会自动创建）。这里从 sysfs 读 major:minor 手动 mknod；裸金属上节点已
+        // 存在，不触发，行为与内网一致。
+        if !std::path::Path::new(&tap_device).exists() {
+            let dev = fs::read_to_string(format!("/sys/class/macvtap/tap{}/dev", tap_index.trim()))
+                .expect("failed to read macvtap dev from sysfs");
+            let dev = dev.trim();
+            let (major, minor) = dev.split_once(':').expect("invalid macvtap dev format");
+            assert!(exec_host_command_status(&format!(
+                "sudo mknod {} c {} {}",
+                tap_device, major, minor
+            ))
+            .success());
+        }
+
         assert!(
             exec_host_command_status(&format!("sudo chown $UID.$UID {}", tap_device)).success()
         );
