@@ -66,6 +66,7 @@ pub struct GuestNetworkConfig {
     pub l2_guest_mac1: String,
     pub l2_guest_mac2: String,
     pub l2_guest_mac3: String,
+    pub l2_guest_mac4: String,
     pub tcp_listener_port: u16,
 }
 
@@ -299,6 +300,8 @@ impl DiskConfig for UbuntuDiskConfig {
             network_config_string.replace("de:ad:be:ef:34:56", &network.l2_guest_mac2);
         network_config_string =
             network_config_string.replace("de:ad:be:ef:56:78", &network.l2_guest_mac3);
+        network_config_string =
+            network_config_string.replace("de:ad:be:ef:78:9a", &network.l2_guest_mac4);
 
         fs::File::create(cloud_init_directory.join("network-config"))
             .unwrap()
@@ -799,6 +802,7 @@ impl Guest {
             l2_guest_mac1: format!("de:ad:be:ef:12:{:02x}", id),
             l2_guest_mac2: format!("de:ad:be:ef:34:{:02x}", id),
             l2_guest_mac3: format!("de:ad:be:ef:56:{:02x}", id),
+            l2_guest_mac4: format!("de:ad:be:ef:78:{:02x}", id),
             tcp_listener_port: DEFAULT_TCP_LISTENER_PORT + id as u16,
         };
 
