@@ -45,12 +45,11 @@ if [ $? -ne 0 ]; then
 fi
 popd
 
-# Download Cloud Hypervisor binary from its last stable release
-LAST_RELEASE_VERSION="v26.0"
-CH_RELEASE_URL="https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/$LAST_RELEASE_VERSION/cloud-hypervisor-static"
+# Use local PVM-aware cube-hypervisor as the "old release" binary
+# (upstream cloud-hypervisor-static v26 lacks PVM CPUID support)
 CH_RELEASE_NAME="cloud-hypervisor-static"
 pushd $WORKLOADS_DIR
-time wget --quiet $CH_RELEASE_URL -O "$CH_RELEASE_NAME" || exit 1
+cp -f /cloud-hypervisor/target/$BUILD_TARGET/release/cube-hypervisor "$CH_RELEASE_NAME"
 chmod +x $CH_RELEASE_NAME
 popd
 
