@@ -1,0 +1,213 @@
+name: Release Cube Gauge
+
+# Publish a PVM guest vmlinux and cube_gauge.ext4 that were built from the
+# SAME kernel tree (vermagic / Module.symvers must match).
+#
+# Prefer a prebuilt pair in deploy/one-click/assets/gauge-pair/ so the files
+# match the vmlinux already on the machine that packed them. If that directory
+# is empty, rebuild PVM guest vmlinux and pack in this job.
+#
+# Tag prefix is cube-gauge-* so official kernel-release.yml (ARC runners)
+# does not start on this fork.
+
+on:
+  push:
+    tags:
+      - 'cube-gauge-*'
+  workflow_dispatch:
+
+concurrency:
+  group: release-cube-gauge-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  PVM_KERNEL_TAG: 6.6.69-1.2.cubesandbox
+  PREBUILT_DIR: deploy/one-click/assets/gauge-pair
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  ensure_release:
+    name: Ensure GitHub Release exists
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure GitHub Release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          case "${tag}" in
+            cube-gauge-*) ;;
+            *)
+              echo "expected cube-gauge-* tag, got: ${tag}" >&2
+              exit 1
+              ;;
+          esac
+          gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1 || \
+            gh release create "${tag}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "${tag}" \
+              --notes "PVM guest vmlinux + matching cube_gauge.ext4 (same kernel tree). Install both under cube-kernel-scf/: vmlinux-pvm-amd64 → vmlinux-pvm, cube_gauge-pvm-amd64.ext4 → cube_gauge.ext4."
+
+  build_pvm_pair:
+    name: Stage PVM vmlinux + cube_gauge.ext4
+    needs: ensure_release
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PAIR_DIR: gauge-release-assets
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use prebuilt pair from the tagged commit
+        id: prebuilt
+        run: |
+          set -euo pipefail
+          if [[ -s "${PREBUILT_DIR}/vmlinux-pvm-amd64" && -s "${PREBUILT_DIR}/cube_gauge-pvm-amd64.ext4" ]]; then
+            echo "present=true" >> "${GITHUB_OUTPUT}"
+            echo "using prebuilt pair from ${PREBUILT_DIR}"
+          else
+            echo "present=false" >> "${GITHUB_OUTPUT}"
+            echo "no prebuilt pair; will rebuild"
+          fi
+
+      - name: Free disk space
+        if: steps.prebuilt.outputs.present != 'true'
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Install build tools
+        if: steps.prebuilt.outputs.present != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential git bc bison flex libelf-dev libssl-dev \
+            libncurses-dev dwarves cpio kmod rsync wget curl ca-certificates \
+            python3 e2fsprogs binutils file
+
+      - name: Build PVM guest vmlinux
+        if: steps.prebuilt.outputs.present != 'true'
+        run: |
+          WORK_DIR="${GITHUB_WORKSPACE}/pvm-guest-build" \
+          OUTPUT_DIR="${GITHUB_WORKSPACE}/pvm-guest-build/output" \
+            bash deploy/pvm/build-pvm-guest-vmlinux.sh
+
+      - name: Pack cube_gauge.ext4 against that vmlinux
+        if: steps.prebuilt.outputs.present != 'true'
+        run: |
+          set -euo pipefail
+          KDIR="${GITHUB_WORKSPACE}/pvm-guest-build/linux"
+          VMLINUX="${GITHUB_WORKSPACE}/pvm-guest-build/output/vmlinux"
+          mkdir -p "${PREBUILT_DIR}"
+          KDIR="${KDIR}" \
+            PAIR_VMLINUX="${VMLINUX}" \
+            OUTPUT="${PREBUILT_DIR}/cube_gauge-pvm-amd64.ext4" \
+            METADATA="${PREBUILT_DIR}/cube-gauge-metadata.json" \
+            bash deploy/guest-modules/pack-cube-gauge-ext4.sh
+          install -D -m 0644 "${VMLINUX}" "${PREBUILT_DIR}/vmlinux-pvm-amd64"
+
+      - name: Stage release assets
+        run: |
+          set -euo pipefail
+          rm -rf "${PAIR_DIR}"
+          mkdir -p "${PAIR_DIR}"
+          install -D -m 0644 "${PREBUILT_DIR}/vmlinux-pvm-amd64" \
+            "${PAIR_DIR}/vmlinux-pvm-amd64"
+          install -D -m 0644 "${PREBUILT_DIR}/cube_gauge-pvm-amd64.ext4" \
+            "${PAIR_DIR}/cube_gauge-pvm-amd64.ext4"
+          if [[ -f "${PREBUILT_DIR}/cube-gauge-metadata.json" ]]; then
+            install -D -m 0644 "${PREBUILT_DIR}/cube-gauge-metadata.json" \
+              "${PAIR_DIR}/cube-gauge-metadata.json"
+          fi
+          python3 - <<'PY'
+          import hashlib, json, os, sys
+          pair = os.environ["PAIR_DIR"]
+          def md5(path):
+              h = hashlib.md5()
+              with open(path, "rb") as f:
+                  for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                      h.update(chunk)
+              return h.hexdigest()
+          vmlinux = os.path.join(pair, "vmlinux-pvm-amd64")
+          ext4 = os.path.join(pair, "cube_gauge-pvm-amd64.ext4")
+          vmd5 = md5(vmlinux)
+          emd5 = md5(ext4)
+          meta_path = os.path.join(pair, "cube-gauge-metadata.json")
+          meta = {}
+          if os.path.isfile(meta_path):
+              with open(meta_path, encoding="utf-8") as f:
+                  meta = json.load(f)
+          if meta.get("vmlinux_md5") and meta["vmlinux_md5"] != vmd5:
+              print(f"PAIR MISMATCH: metadata vmlinux_md5 {meta['vmlinux_md5']} != {vmd5}", file=sys.stderr)
+              sys.exit(1)
+          if meta.get("cube_gauge_ext4_md5") and meta["cube_gauge_ext4_md5"] != emd5:
+              print(f"PAIR MISMATCH: metadata ext4 md5 {meta['cube_gauge_ext4_md5']} != {emd5}", file=sys.stderr)
+              sys.exit(1)
+          meta["vmlinux_md5"] = vmd5
+          meta["cube_gauge_ext4_md5"] = emd5
+          meta["pvm_source_tag"] = os.environ.get("PVM_KERNEL_TAG", "")
+          meta["release_tag"] = os.environ["GITHUB_REF_NAME"]
+          with open(meta_path, "w", encoding="utf-8") as f:
+              json.dump(meta, f, indent=2, sort_keys=True)
+              f.write("\n")
+          print(f"paired vmlinux_md5={vmd5}")
+          print(f"paired ext4_md5={emd5}")
+          print(f"vermagic={meta.get('vermagic', '')}")
+          PY
+          test -s "${PAIR_DIR}/vmlinux-pvm-amd64"
+          test -s "${PAIR_DIR}/cube_gauge-pvm-amd64.ext4"
+          file "${PAIR_DIR}/vmlinux-pvm-amd64"
+
+      - name: Upload pair artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cube-gauge-pvm-amd64
+          path: |
+            gauge-release-assets/vmlinux-pvm-amd64
+            gauge-release-assets/cube_gauge-pvm-amd64.ext4
+            gauge-release-assets/cube-gauge-metadata.json
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Upload pair to GitHub Release
+    needs:
+      - ensure_release
+      - build_pvm_pair
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download pair
+        uses: actions/download-artifact@v4
+        with:
+          name: cube-gauge-pvm-amd64
+          path: gauge-release-assets
+
+      - name: Upload assets to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ls -lh gauge-release-assets
+          gh release upload "${GITHUB_REF_NAME}" \
+            gauge-release-assets/vmlinux-pvm-amd64 \
+            gauge-release-assets/cube_gauge-pvm-amd64.ext4 \
+            gauge-release-assets/cube-gauge-metadata.json \
+            --repo "${GITHUB_REPOSITORY}" \
+            --clobber
+          gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --json assets \
+            --jq '.assets[].name'

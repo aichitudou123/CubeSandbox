@@ -38,6 +38,8 @@ cubemastercli tpl create-from-image \
 ```
 
 > Pass `--backend s3` to store the template (and every sandbox / snapshot derived from it) on the cluster-shared S3 CoW backend. That is required for [cross-node Pause / Resume / FromSnap](../cross-node-snapshot.md). Omit the flag to keep the historical `xfs` path.
+>
+> Pass `--enable-metric` to bake the GAUGE guest perf channel into the template. See [Guest Perf Metrics (GAUGE)](../guest-perf-metrics.md).
 
 Template creation can expose multiple ports, use a custom probe path, and pass environment variables:
 

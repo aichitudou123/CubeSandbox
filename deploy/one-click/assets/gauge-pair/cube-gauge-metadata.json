@@ -1,0 +1,9 @@
+{
+  "cube_gauge_ext4_md5": "c54fa40fad92c8106d2a7e3b6daaadfd",
+  "kdir": "deploy/pvm/pvm-guest-build/linux",
+  "paired_with": "toolbox vmlinux-pvm md5 bd556558617bee11590e499ff9784521 (local pvm-guest-build, not GitHub kernel-release-260812-1)",
+  "pvm_source_tag": "6.6.69-1.2.cubesandbox",
+  "schema_version": 1,
+  "vermagic": "6.6.69-opencloudos9.cubesandbox.pvm.guest-g0de43d6b3bcd SMP preempt mod_unload modversions",
+  "vmlinux_md5": "bd556558617bee11590e499ff9784521"
+}

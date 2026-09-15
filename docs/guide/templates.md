@@ -76,3 +76,4 @@ The same OCI image can therefore produce different templates depending on CPU, m
 - [Create Templates from OCI Image](./tutorials/template-from-image.md) — complete CLI workflow, including probes, progress monitoring, and troubleshooting.
 - [Commit a Running Sandbox as a Template](./tutorials/template-from-sandbox.md) — preserve a sandbox environment and optionally override its create request.
 - [Template Inspection and Request Preview](./template-inspection-and-preview.md) — inspect template state and preview the effective request.
+- [Guest Perf Metrics (GAUGE)](./guest-perf-metrics.md) — `--enable-metric` on template create for the guest↔host perf channel.
