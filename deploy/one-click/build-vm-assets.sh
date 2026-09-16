@@ -24,6 +24,12 @@ RAW_ARTIFACTS_DIR="${SCRIPT_DIR}/assets/kernel-artifacts"
 
 CUBE_KERNEL_VMLINUX="${ONE_CLICK_CUBE_KERNEL_VMLINUX:-${RAW_ARTIFACTS_DIR}/vmlinux}"
 CUBE_KERNEL_PVM_VMLINUX="${ONE_CLICK_CUBE_KERNEL_PVM_VMLINUX:-${RAW_ARTIFACTS_DIR}/vmlinux-pvm}"
+# cube_modules.ext4 carries the guest kernel modules (cube_gauge.ko today)
+# built from the same kernel tree as the vmlinux next to it. Optional: kernel
+# artifacts produced before the module existed have none, and the runtime
+# treats a missing image as "metrics unavailable" rather than an error.
+CUBE_MODULES_BM_EXT4="${ONE_CLICK_CUBE_MODULES_BM_EXT4:-${RAW_ARTIFACTS_DIR}/cube_modules-bm.ext4}"
+CUBE_MODULES_PVM_EXT4="${ONE_CLICK_CUBE_MODULES_PVM_EXT4:-${RAW_ARTIFACTS_DIR}/cube_modules-pvm.ext4}"
 
 CUBE_SHIM_BUILD_MODE="${ONE_CLICK_CUBE_SHIM_BUILD_MODE:-local}"
 
@@ -139,6 +145,25 @@ elif [[ -n "${ONE_CLICK_CUBE_KERNEL_PVM_VMLINUX:-}" ]]; then
   die "PVM kernel vmlinux file not found: ${CUBE_KERNEL_PVM_VMLINUX}"
 else
   log "PVM kernel vmlinux not found; packaging ordinary kernel only"
+fi
+
+# Keep each cube_modules image named after the kernel variant it was built
+# against; install.sh links cube_modules.ext4 to the one it selects.
+if [[ -f "${CUBE_MODULES_BM_EXT4}" ]]; then
+  log "copying cube_modules.ext4 for the ordinary guest kernel"
+  copy_file "${CUBE_MODULES_BM_EXT4}" "${RUNTIME_LAYOUT_DIR}/cube-kernel-scf/cube_modules-bm.ext4"
+  ensure_file "${RUNTIME_LAYOUT_DIR}/cube-kernel-scf/cube_modules-bm.ext4"
+else
+  log "no cube_modules image for the ordinary guest kernel; guest perf metrics will be unavailable"
+fi
+if [[ -f "${RUNTIME_LAYOUT_DIR}/cube-kernel-scf/vmlinux-pvm" ]]; then
+  if [[ -f "${CUBE_MODULES_PVM_EXT4}" ]]; then
+    log "copying cube_modules.ext4 for the PVM guest kernel"
+    copy_file "${CUBE_MODULES_PVM_EXT4}" "${RUNTIME_LAYOUT_DIR}/cube-kernel-scf/cube_modules-pvm.ext4"
+    ensure_file "${RUNTIME_LAYOUT_DIR}/cube-kernel-scf/cube_modules-pvm.ext4"
+  else
+    log "no cube_modules image for the PVM guest kernel; guest perf metrics will be unavailable"
+  fi
 fi
 
 # Kernel version.json: variants keyed by file digest.

@@ -1224,6 +1224,20 @@ select_installed_kernel_vmlinux() {
   else
     log "selected ordinary guest kernel: ${kernel_dir}/vmlinux -> ${target}"
   fi
+
+  # The guest kernel modules must come from the same kernel tree as the
+  # selected vmlinux, so the image follows the same choice. Older packages ship
+  # no cube_modules image at all; leave the link absent so the runtime reports
+  # metrics as unavailable instead of loading a mismatched module.
+  local modules_variant="${target#vmlinux-}"
+  local modules_image="cube_modules-${modules_variant}.ext4"
+  if [[ -f "${kernel_dir}/${modules_image}" ]]; then
+    ln -sfn "${modules_image}" "${kernel_dir}/cube_modules.ext4"
+    log "selected guest kernel module image: ${kernel_dir}/cube_modules.ext4 -> ${modules_image}"
+  else
+    rm -f "${kernel_dir}/cube_modules.ext4"
+    log "no ${modules_image} in this package; guest perf metrics unavailable"
+  fi
 }
 
 # component_versions root.
