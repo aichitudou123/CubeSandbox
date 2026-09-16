@@ -17,7 +17,14 @@
 # Update these after publishing dedicated Releases, for example:
 #   git tag kernel-release-v1.0.0 && git push origin kernel-release-v1.0.0
 #   git tag guest-image-v1.0.0 && git push origin guest-image-v1.0.0
-kernel_bm_amd64: kernel-release-260812-1
-kernel_bm_arm64: kernel-release-260812-1
-kernel_pvm: kernel-release-260812-1
+#
+# ORIGIN2 TEST ONLY — do not commit / do not send upstream.
+# The pinned kernel-release-* lives on aichitudou123/CubeSandbox and must be
+# one built after the cube_modules.ext4 rename, since the one-click job now
+# looks for cube_modules-*.ext4. guest_image is still the official tag
+# (fork has no guest-image Release); one-click must download it from
+# TencentCloud/CubeSandbox (see KERNEL_ASSET_REPO / GUEST_ASSET_REPO).
+kernel_bm_amd64: kernel-release-260917-2
+kernel_bm_arm64: kernel-release-260917-2
+kernel_pvm: kernel-release-260917-2
 guest_image: guest-image-260820-1

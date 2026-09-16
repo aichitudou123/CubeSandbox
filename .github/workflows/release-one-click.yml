@@ -21,6 +21,11 @@ permissions:
 
 env:
   BUILDER_IMAGE: ghcr.io/tencentcloud/cubesandbox-builder:ubuntu2004
+  # ORIGIN2 TEST ONLY — revert before any upstream commit.
+  # Kernel assets (vmlinux + cube_modules.ext4) were published on the fork
+  # Release kernel-release-260916-1. Guest image still lives on origin.
+  KERNEL_ASSET_REPO: aichitudou123/CubeSandbox
+  GUEST_ASSET_REPO: TencentCloud/CubeSandbox
 
 jobs:
   verify_versions:
@@ -62,27 +67,27 @@ jobs:
           GUEST_IMAGE_RELEASE_TAG: ${{ steps.pins.outputs.guest_image_release_tag }}
         run: |
           set -euo pipefail
-          echo "kernel_bm_amd64 pin: ${KERNEL_BM_AMD64_RELEASE_TAG}"
-          echo "kernel_bm_arm64 pin: ${KERNEL_BM_ARM64_RELEASE_TAG}"
-          echo "kernel_pvm pin: ${KERNEL_PVM_RELEASE_TAG}"
-          echo "guest_image pin: ${GUEST_IMAGE_RELEASE_TAG}"
+          echo "kernel_bm_amd64 pin: ${KERNEL_BM_AMD64_RELEASE_TAG} repo=${KERNEL_ASSET_REPO}"
+          echo "kernel_bm_arm64 pin: ${KERNEL_BM_ARM64_RELEASE_TAG} repo=${KERNEL_ASSET_REPO}"
+          echo "kernel_pvm pin: ${KERNEL_PVM_RELEASE_TAG} repo=${KERNEL_ASSET_REPO}"
+          echo "guest_image pin: ${GUEST_IMAGE_RELEASE_TAG} repo=${GUEST_ASSET_REPO}"
 
           require_assets() {
-            local tag="$1"
-            shift
+            local repo="$1" tag="$2"
+            shift 2
             local assets
             if ! assets="$(
-              gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" --json assets \
+              gh release view "${tag}" --repo "${repo}" --json assets \
                 --jq '.assets[].name' 2>/dev/null
             )"; then
-              echo "pinned Release not found: ${tag}" >&2
+              echo "pinned Release not found: ${repo}@${tag}" >&2
               echo "publish it first: git tag ${tag} && git push origin ${tag}" >&2
               exit 1
             fi
             local name
             for name in "$@"; do
               if ! grep -Fxq "${name}" <<<"${assets}"; then
-                echo "missing required asset ${name} on ${tag}" >&2
+                echo "missing required asset ${name} on ${repo}@${tag}" >&2
                 echo "assets on ${tag}:" >&2
                 printf '%s\n' "${assets}" >&2
                 exit 1
@@ -90,10 +95,10 @@ jobs:
             done
           }
 
-          require_assets "${KERNEL_BM_AMD64_RELEASE_TAG}" vmlinux-amd64 kernel-metadata.json
-          require_assets "${KERNEL_BM_ARM64_RELEASE_TAG}" vmlinux-arm64 kernel-metadata.json
-          require_assets "${KERNEL_PVM_RELEASE_TAG}" vmlinux-pvm-amd64 kernel-metadata.json
-          require_assets "${GUEST_IMAGE_RELEASE_TAG}" \
+          require_assets "${KERNEL_ASSET_REPO}" "${KERNEL_BM_AMD64_RELEASE_TAG}" vmlinux-amd64 kernel-metadata.json
+          require_assets "${KERNEL_ASSET_REPO}" "${KERNEL_BM_ARM64_RELEASE_TAG}" vmlinux-arm64 kernel-metadata.json
+          require_assets "${KERNEL_ASSET_REPO}" "${KERNEL_PVM_RELEASE_TAG}" vmlinux-pvm-amd64 kernel-metadata.json
+          require_assets "${GUEST_ASSET_REPO}" "${GUEST_IMAGE_RELEASE_TAG}" \
             cube-guest-image-amd64.tar.gz \
             cube-guest-image-arm64.tar.gz
 
@@ -105,7 +110,7 @@ jobs:
             local dir
             dir="$(mktemp -d)"
             gh release download "${tag}" \
-              --repo "${GITHUB_REPOSITORY}" \
+              --repo "${KERNEL_ASSET_REPO}" \
               --pattern "kernel-metadata.json" \
               --dir "${dir}"
             scripts/read-kernel-metadata.sh "${dir}/kernel-metadata.json" >/dev/null
@@ -118,7 +123,7 @@ jobs:
           validate_metadata "${KERNEL_PVM_RELEASE_TAG}"
 
           pvm_assets="$(
-            gh release view "${KERNEL_PVM_RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json assets \
+            gh release view "${KERNEL_PVM_RELEASE_TAG}" --repo "${KERNEL_ASSET_REPO}" --json assets \
               --jq '.assets[].name'
           )"
           has_rpm=0
@@ -282,15 +287,15 @@ jobs:
           rm -rf downloaded-kernel
           mkdir -p downloaded-kernel/bm-meta downloaded-kernel/pvm-meta
           gh release download "${KERNEL_BM_AMD64_RELEASE_TAG}" \
-            --repo "${GITHUB_REPOSITORY}" \
+            --repo "${KERNEL_ASSET_REPO}" \
             --pattern "vmlinux-amd64" \
             --dir downloaded-kernel
           gh release download "${KERNEL_BM_AMD64_RELEASE_TAG}" \
-            --repo "${GITHUB_REPOSITORY}" \
+            --repo "${KERNEL_ASSET_REPO}" \
             --pattern "kernel-metadata.json" \
             --dir downloaded-kernel/bm-meta
           gh release download "${KERNEL_PVM_RELEASE_TAG}" \
-            --repo "${GITHUB_REPOSITORY}" \
+            --repo "${KERNEL_ASSET_REPO}" \
             --pattern "vmlinux-pvm-amd64" \
             --dir downloaded-kernel
           if [[ "${KERNEL_PVM_RELEASE_TAG}" == "${KERNEL_BM_AMD64_RELEASE_TAG}" ]]; then
@@ -298,7 +303,7 @@ jobs:
               downloaded-kernel/pvm-meta/kernel-metadata.json
           else
             gh release download "${KERNEL_PVM_RELEASE_TAG}" \
-              --repo "${GITHUB_REPOSITORY}" \
+              --repo "${KERNEL_ASSET_REPO}" \
               --pattern "kernel-metadata.json" \
               --dir downloaded-kernel/pvm-meta
           fi
@@ -319,7 +324,7 @@ jobs:
           stage_optional_modules_ext4() {
             local tag="$1" asset="$2" dest="$3"
             if gh release download "${tag}" \
-                 --repo "${GITHUB_REPOSITORY}" \
+                 --repo "${KERNEL_ASSET_REPO}" \
                  --pattern "${asset}" \
                  --dir downloaded-kernel; then
               install -D -m 0644 "downloaded-kernel/${asset}" "${dest}"
@@ -351,7 +356,7 @@ jobs:
           rm -rf downloaded-guest
           mkdir -p downloaded-guest
           gh release download "${GUEST_IMAGE_RELEASE_TAG}" \
-            --repo "${GITHUB_REPOSITORY}" \
+            --repo "${GUEST_ASSET_REPO}" \
             --pattern "cube-guest-image-amd64.tar.gz" \
             --dir downloaded-guest
           test -f downloaded-guest/cube-guest-image-amd64.tar.gz
@@ -445,11 +450,11 @@ jobs:
           rm -rf downloaded-kernel
           mkdir -p downloaded-kernel/bm-meta downloaded-kernel/pvm-meta
           gh release download "${KERNEL_BM_ARM64_RELEASE_TAG}" \
-            --repo "${GITHUB_REPOSITORY}" \
+            --repo "${KERNEL_ASSET_REPO}" \
             --pattern "vmlinux-arm64" \
             --dir downloaded-kernel
           gh release download "${KERNEL_BM_ARM64_RELEASE_TAG}" \
-            --repo "${GITHUB_REPOSITORY}" \
+            --repo "${KERNEL_ASSET_REPO}" \
             --pattern "kernel-metadata.json" \
             --dir downloaded-kernel/bm-meta
           if [[ "${KERNEL_PVM_RELEASE_TAG}" == "${KERNEL_BM_ARM64_RELEASE_TAG}" ]]; then
@@ -457,7 +462,7 @@ jobs:
               downloaded-kernel/pvm-meta/kernel-metadata.json
           else
             gh release download "${KERNEL_PVM_RELEASE_TAG}" \
-              --repo "${GITHUB_REPOSITORY}" \
+              --repo "${KERNEL_ASSET_REPO}" \
               --pattern "kernel-metadata.json" \
               --dir downloaded-kernel/pvm-meta
           fi
@@ -470,7 +475,7 @@ jobs:
           # Optional, same as the amd64 bundle: older pinned kernel Releases
           # have no cube_modules asset.
           if gh release download "${KERNEL_BM_ARM64_RELEASE_TAG}" \
-               --repo "${GITHUB_REPOSITORY}" \
+               --repo "${KERNEL_ASSET_REPO}" \
                --pattern "cube_modules-bm-arm64.ext4" \
                --dir downloaded-kernel; then
             install -D -m 0644 \
@@ -499,7 +504,7 @@ jobs:
           rm -rf downloaded-guest
           mkdir -p downloaded-guest
           gh release download "${GUEST_IMAGE_RELEASE_TAG}" \
-            --repo "${GITHUB_REPOSITORY}" \
+            --repo "${GUEST_ASSET_REPO}" \
             --pattern "cube-guest-image-arm64.tar.gz" \
             --dir downloaded-guest
           test -f downloaded-guest/cube-guest-image-arm64.tar.gz

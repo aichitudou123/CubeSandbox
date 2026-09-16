@@ -66,7 +66,10 @@ jobs:
   build_bm:
     name: Build BM vmlinux (${{ matrix.kernel_arch }})
     needs: ensure_release
-    runs-on: ${{ matrix.runner }}
+    # ORIGIN2 TEST ONLY — revert before any upstream commit. A fork has no
+    # arc-runner-set, so those jobs queue forever; fall back to a
+    # GitHub-hosted runner whenever this is not the upstream repository.
+    runs-on: ${{ (github.repository != 'TencentCloud/CubeSandbox' && matrix.runner == 'arc-runner-set-16c32g-containerd') && 'ubuntu-latest' || matrix.runner }}
     container:
       image: ubuntu:24.04
     strategy:
@@ -212,7 +215,8 @@ jobs:
   build_pvm_guest:
     name: Build PVM guest vmlinux (x86_64)
     needs: ensure_release
-    runs-on: arc-runner-set-16c32g-containerd
+    # ORIGIN2 TEST ONLY — revert before any upstream commit.
+    runs-on: ${{ github.repository == 'TencentCloud/CubeSandbox' && 'arc-runner-set-16c32g-containerd' || 'ubuntu-latest' }}
     container:
       image: ubuntu:24.04
 
@@ -306,7 +310,8 @@ jobs:
   build_pvm_host_deb:
     name: Build PVM host kernel (deb)
     needs: ensure_release
-    runs-on: arc-runner-set-16c32g-containerd
+    # ORIGIN2 TEST ONLY — revert before any upstream commit.
+    runs-on: ${{ github.repository == 'TencentCloud/CubeSandbox' && 'arc-runner-set-16c32g-containerd' || 'ubuntu-latest' }}
     container:
       image: ubuntu:24.04
 
@@ -348,7 +353,8 @@ jobs:
   build_pvm_host_rpm:
     name: Build PVM host kernel (rpm)
     needs: ensure_release
-    runs-on: arc-runner-set-16c32g-containerd
+    # ORIGIN2 TEST ONLY — revert before any upstream commit.
+    runs-on: ${{ github.repository == 'TencentCloud/CubeSandbox' && 'arc-runner-set-16c32g-containerd' || 'ubuntu-latest' }}
     container:
       image: opencloudos/opencloudos9-minimal:latest
 
